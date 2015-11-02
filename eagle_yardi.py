@@ -229,6 +229,126 @@ class eagle_yardi:
 					else:
 						writer.writerow(person)
 
+class eagle_yardi2:
+
+	def __init__(self, directory, output, args):
+		self.args = args
+		self.headers = ['Prospect Name', 'Address', 'Home Phone', 'Office Phone', 'Desired Requirements', 'Date Needed', 'Source', 'Status', 'Agent', 'Event Type', 'Event Date', 'Result/Reason']
+		self.header_fields_raw = ['Property ID', 'Property_Name', 'Name', 'Source', 'Status', 'Event Date', 'Event Type', 'Home Phone', 'Office Phone'] 
+		self.header_fields = ['Property ID', 'Property_Name', 'Name', 'First Name', 'Last Name', 'Source', 'Status', 'Event Date', 'Event Type', 'Home Phone', 'Office Phone']
+		self.excel_files = []
+		self.keys = {}
+		self.output = output
+		for dirpath, dirnames, files in os.walk(directory):
+			self.dirpath = dirpath
+			for f in files:
+				self.excel_files.append(os.path.join(dirpath, f))
+		if args.keys != "":
+			try:
+				with open(self.args.keys, 'r') as key_file:
+					reader = csv.DictReader(key_file, delimiter="\t")
+					for row in reader:
+						temp_row = {}
+						for key, val in row.iteritems():
+							temp_row[key.strip().lower()] = val
+						if temp_row['property id'] != "":
+							temp_prop_key = re.sub("\(\d*\)?", "", temp_row['pmc-prop']).strip().lower()
+							temp_prop_key  = " ".join(temp_prop_key.split())
+							self.keys[temp_prop_key] = temp_row['property id']
+			except Exception as inst:
+				sys.stderr.write("FATAL ERROR %s. Failure to read input key file %s\n" % (inst, args.keys))
+
+	def names_parse(self):
+		people = []
+		count = 0
+		for excel_file in self.excel_files:
+			print excel_file
+			count += 1
+			print count
+			workbook = xlrd.open_workbook(excel_file)
+			worksheet = workbook.sheet_by_index(0)
+
+			name_index = 0
+			event_date_index = 0
+			source_index = 0
+			status_index = 0
+			event_type_index = 0
+			home_phone_index = 0
+			office_phone_index = 0
+			start = False
+			end = False
+			prop_name_cell = worksheet.cell(1,0).value
+			person = {}
+
+			for row_index in range(worksheet.nrows):
+				cell = worksheet.cell(row_index,0).value
+				cell = cell.strip()
+				cell = cell.replace('\n','')
+				if cell in self.headers:
+					start = True
+					header_row = worksheet.row_values(row_index,0)
+					#Find the column index of the different header row names
+					for i, c in enumerate(header_row):
+						if 'prospect' and 'name' in c.lower():
+							name_index = i
+						elif 'event' and 'date' in c.lower():
+							event_date_index = i
+						elif 'source' in c.lower():
+							source_index = i
+						elif 'status' in c.lower():
+							status_index = i
+						elif 'event' and 'type' in c.lower():
+							event_type_index = i
+						elif 'home' in c.lower() and 'phone' in c.lower():
+							home_phone_index = i
+						elif 'office' in c.lower() and 'phone' in c.lower():
+							office_phone_index = i
+				elif 'event' and 'summary' in cell.lower():
+					end = True
+				elif end:
+					continue
+				elif start:
+					row = worksheet.row_values(row_index,0)
+					name_cell = worksheet.cell(row_index, name_index).value
+					name_cell = name_cell.encode('utf-8')
+					event_date_cell = worksheet.cell(row_index, event_date_index).value
+					source_cell = worksheet.cell(row_index, source_index).value
+					status_cell = worksheet.cell(row_index, status_index).value
+					event_type_cell = worksheet.cell(row_index, event_type_index).value
+					home_phone_cell = worksheet.cell(row_index, home_phone_index).value
+					office_phone_cell = worksheet.cell(row_index, office_phone_index).value
+					if name_cell != "" and source_cell != "":
+						#Need to add prop_name_cell to prop_key conversion
+						prop_key = prop_name_cell
+						if self.args.raw == True:
+							person = {'Property ID': self.keys.get(prop_key, ''), 'Property_Name': prop_name_cell, 'Name': name_cell, 'Source': source_cell, 'Status': status_cell, 'Event Date': event_date_cell, 'Event Type': event_type_cell, 'Home Phone': home_phone_cell, 'Office Phone': office_phone_cell}
+						else:
+							person = {'Property ID': self.keys.get(prop_key, ''), 'Property_Name': prop_name_cell, 'Name': name_cell, 'Source': source_cell, 'Status': status_cell, 'Event Date': event_date_cell, 'Event Type': event_type_cell, 'Home Phone': home_phone_cell, 'Office Phone': office_phone_cell}
+							processed_name = eagle.namer(name_cell)
+							person['First Name'] = processed_name[0].encode('utf-8')
+							person['Last Name'] = processed_name[1].encode('utf-8')
+						#Add person dict to people list
+						people.append(person)
+
+		with open(self.output, 'wb') as out_file:
+			if self.args.raw == True:
+				out_file.write(u'\ufeff'.encode('utf8'))  #BOM for Excel to open UTF-8 file properly
+				writer = csv.DictWriter(out_file, fieldnames=self.header_fields_raw)
+				writer.writeheader()
+				for person in people:
+					#print person
+					writer.writerow(person)
+			else:
+				out_file.write(u'\ufeff'.encode('utf8'))  #BOM for Excel to open UTF-8 file properly
+				writer = csv.DictWriter(out_file, fieldnames=self.header_fields)
+				writer.writeheader()
+				for person in people:
+					if self.args.filter == True:
+						status = person['Status'].lower()
+						if 'resident' in status:
+							writer.writerow(person)
+					else:
+						writer.writerow(person)
 
 
 def main():
@@ -247,13 +367,13 @@ def main():
 	if os.path.exists(args.infile):
 		#eagle_yardi(args.infile, args.outfile).prop_name_parse()
 		if args.prop_name:
-			eagle_yardi(args.infile, args.outfile, args).prop_name_parse()
+			eagle_yardi2(args.infile, args.outfile, args).prop_name_parse()
 		elif args.header_row:
-			eagle_yardi(args.infile, args.outfile, args).headers_parse()
+			eagle_yardi2(args.infile, args.outfile, args).headers_parse()
 		elif args.section_titles:
-			eagle_yardi(args.infile, args.outfile, args).section_titles_parse()
+			eagle_yardi2(args.infile, args.outfile, args).section_titles_parse()
 		elif args.raw or args.names or args.filter:
-			eagle_yardi(args.infile, args.outfile, args).names_parse()
+			eagle_yardi2(args.infile, args.outfile, args).names_parse()
 	else:
 		print "The folder path does not exist!"
 		print "Exiting the script."
