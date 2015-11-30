@@ -6,7 +6,7 @@ import os
 import sys
 from eagle import eagle
 
-class eagle_yardi:
+class eagle_yardi1:
 
 	def __init__(self, directory, output, args):
 		self.args = args
@@ -353,6 +353,7 @@ class eagle_yardi2:
 
 def main():
 	parser = argparse.ArgumentParser(description='')
+	parser.add_argument('--ver', type=int, default=1, help='Enter 1 to process Traffic Details or 2 to process Traffic Sheets.')
 	parser.add_argument('-p', '--prop_name', action='store_true', default=False, help='Extract the cell containing the property name.')
 	parser.add_argument('--header_row', action='store_true', default=False, help='Extract the header_row cells.')
 	parser.add_argument('-s', '--section_titles', action='store_true', default=False, help='Extract the section titles row.')
@@ -364,16 +365,21 @@ def main():
 	parser.add_argument('outfile', nargs='?', type=str, default=sys.stdout, help='Enter the path and name of the output file.')
 	args = parser.parse_args()
 
+	if args.ver == 1:
+		eagle_class = eagle_yardi1
+	elif args.ver == 2:
+		eagle_class = eagle_yardi2	
+
 	if os.path.exists(args.infile):
 		#eagle_yardi(args.infile, args.outfile).prop_name_parse()
 		if args.prop_name:
-			eagle_yardi2(args.infile, args.outfile, args).prop_name_parse()
+			eagle_class(args.infile, args.outfile, args).prop_name_parse()
 		elif args.header_row:
-			eagle_yardi2(args.infile, args.outfile, args).headers_parse()
+			eagle_class(args.infile, args.outfile, args).headers_parse()
 		elif args.section_titles:
-			eagle_yardi2(args.infile, args.outfile, args).section_titles_parse()
+			eagle_class(args.infile, args.outfile, args).section_titles_parse()
 		elif args.raw or args.names or args.filter:
-			eagle_yardi2(args.infile, args.outfile, args).names_parse()
+			eagle_class(args.infile, args.outfile, args).names_parse()
 	else:
 		print "The folder path does not exist!"
 		print "Exiting the script."
